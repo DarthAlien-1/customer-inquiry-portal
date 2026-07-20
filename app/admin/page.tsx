@@ -1,327 +1,144 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 
-interface Lead {
+// Defines the structure of the database rows coming from Supabase
+type Lead = {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   serviceRequested: string;
   message: string;
-  status: 'New' | 'In Progress' | 'Completed';
+  status: string;
   createdAt: string;
-}
-
-interface LogEntry {
-  id: string;
-  timestamp: string;
-  action: string;
-}
+};
 
 export default function AdminDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'All' | 'New' | 'In Progress' | 'Completed'>('All');
-  const [serviceFilter, setServiceFilter] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showStats, setShowStats] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Helper function to add a timestamped UI log entry
-  const addLog = (actionText: string) => {
-    const timeStr = new Date().toTimeString().split(' ')[0].substring(0, 5);
-    setLogs(prev => [{ id: Math.random().toString(), timestamp: timeStr, action: actionText }, ...prev]);
-  };
-
-  // 1. Load data grid from database route on page load
+  // Fetch the data from the database when the page loads
   useEffect(() => {
-    async function fetchLeads() {
-      try {
-        const response = await fetch('/api/leads');
-        if (!response.ok) throw new Error();
-        const data = await response.json();
-        setLeads(data);
-        addLog('Dashboard data grid pulled from database.');
-      } catch (error) {
-        addLog('Error: Failed to fetch data grid from database.');
-      }
-    }
     fetchLeads();
   }, []);
 
-  // 2. Update progress status dropdown
-  const handleStatusChange = async (id: string, newStatus: Lead['status']) => {
-    const leadToUpdate = leads.find(l => l.id === id);
+  const fetchLeads = async () => {
     try {
-      const response = await fetch(`/api/leads/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (!response.ok) throw new Error();
-      
-      setLeads(leads.map(lead => lead.id === id ? { ...lead, status: newStatus } : lead));
-      addLog(`Updated status for ${leadToUpdate?.firstName} to ${newStatus}`);
+      const response = await fetch("/api/leads");
+      if (!response.ok) throw new Error("Failed to fetch database records");
+      const data = await response.json();
+      setLeads(data);
     } catch (error) {
-      addLog(`Error: Failed to change status for ${leadToUpdate?.firstName}`);
+      console.error("Error loading leads:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // 3. Delete a single entry
-  const deleteLead = async (id: string) => {
-    const leadToDelete = leads.find(l => l.id === id);
+  // Triggers the specific dynamic route to delete a row
+  const handleDelete = async (id: string) => {
+    // Adds a safety check so you don't accidentally delete records
+    if (!confirm("Are you sure you want to delete this inquiry?")) return;
+
     try {
       const response = await fetch(`/api/leads/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
-      if (!response.ok) throw new Error();
-
-      setLeads(leads.filter(lead => lead.id !== id));
-      setSelectedIds(prev => prev.filter(item => item !== id));
-      addLog(`Removed inquiry from ${leadToDelete?.firstName} ${leadToDelete?.lastName}`);
-    } catch (error) {
-      addLog(`Error: Failed to remove inquiry from ${leadToDelete?.firstName}`);
-    }
-  };
-
-  // 4. Delete multiple items
-  const handleBulkDelete = async () => {
-    addLog(`Starting bulk delete for ${selectedIds.length} items...`);
-    
-    // Process deletions side by side
-    const deletePromises = selectedIds.map(async (id) => {
-      try {
-        const response = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
-        if (response.ok) return id;
-      } catch (e) {
-        return null;
+      if (response.ok) {
+        // If successful, instantly remove that row from the screen
+        setLeads(leads.filter((lead) => lead.id !== id));
+      } else {
+        console.error("Failed to delete record");
       }
-    });
-
-    const results = await Promise.all(deletePromises);
-    const successfullyDeleted = results.filter((id): id is string => id !== null);
-
-    setLeads(leads.filter(lead => !successfullyDeleted.includes(lead.id)));
-    addLog(`Bulk deleted ${successfullyDeleted.length} items.`);
-    setSelectedIds([]);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredLeads.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredLeads.map(l => l.id));
+    } catch (error) {
+      console.error("Delete Error:", error);
     }
   };
 
-  const toggleSelectOne = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  };
-
-  const sortedLeads = [...leads].sort((a, b) => {
-    if (sortBy === 'name') return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-    return b.createdAt.localeCompare(a.createdAt);
-  });
-
-  const filteredLeads = sortedLeads.filter(lead => {
-    const fullName = `${lead.firstName} ${lead.lastName}`.toLowerCase();
-    const email = lead.email.toLowerCase();
-    const matchesSearch = fullName.includes(searchQuery.toLowerCase()) || email.includes(searchQuery.toLowerCase());
-    const matchesTab = activeTab === 'All' || lead.status === activeTab;
-    const matchesService = serviceFilter === 'All' || lead.serviceRequested === serviceFilter;
-    return matchesSearch && matchesTab && matchesService;
-  });
-
-  const countNew = leads.filter(l => l.status === 'New').length;
-  const countInProgress = leads.filter(l => l.status === 'In Progress').length;
-  const countCompleted = leads.filter(l => l.status === 'Completed').length;
+  // Show a loading screen while Next.js talks to Supabase
+  if (isLoading) {
+    return <div className="p-8 text-center text-gray-500">Loading dashboard data...</div>;
+  }
 
   return (
-    <main className="min-h-screen bg-[#f8f9fa] p-6 md:p-10 text-zinc-700 font-sans tracking-tight">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        <div className="pb-4 border-b border-zinc-300 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900">Internal Management Dashboard</h1>
-            <p className="text-xs text-zinc-500 mt-0.5">Private business portal to track and organize requests.</p>
-          </div>
-          <button 
-            onClick={() => setShowStats(!showStats)}
-            className="px-3 py-1.5 bg-white border border-zinc-300 text-zinc-700 hover:bg-zinc-50 font-medium text-xs rounded-md transition-colors shadow-sm cursor-pointer"
-          >
-            {showStats ? 'Hide Totals' : 'Show Totals'}
-          </button>
-        </div>
+    <div className="p-8 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
+      
+      <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
+        <table className="min-w-full text-left text-sm border-collapse">
+          <thead className="bg-gray-100 border-b border-gray-200">
+            <tr>
+              <th className="p-4 font-semibold text-gray-700">CUSTOMER DETAILS</th>
+              <th className="p-4 font-semibold text-gray-700">SERVICE CATEGORY</th>
+              <th className="p-4 font-semibold text-gray-700">REQUEST DETAILS</th>
+              <th className="p-4 font-semibold text-gray-700">CURRENT PROGRESS</th>
+              <th className="p-4 font-semibold text-gray-700">ACTION</th>
+            </tr>
+          </thead>
+          
+          <tbody className="divide-y divide-gray-200">
+            {leads.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-gray-500">
+                  No customer inquiries found.
+                </td>
+              </tr>
+            ) : (
+              leads.map((lead) => (
+                <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                  
+                  {/* Column 1: Customer Details */}
+                  <td className="p-4 align-top">
+                    <strong className="block text-gray-900 text-base">
+                      {lead.firstName} {lead.lastName}
+                    </strong>
+                    <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
+                      {lead.email}
+                    </a>
+                  </td>
+                  
+                  {/* Column 2: Service Category */}
+                  <td className="p-4 align-top text-gray-700 font-medium">
+                    {lead.serviceRequested}
+                  </td>
+                  
+                  {/* Column 3: The Expanding Message Details */}
+                  <td className="p-4 align-top max-w-xs">
+                    <details className="cursor-pointer group">
+                      <summary className="truncate text-gray-700 hover:text-blue-600 outline-none list-none font-medium">
+                        {lead.message || "No additional message provided."}
+                      </summary>
+                      <p className="mt-2 text-sm text-gray-600 whitespace-pre-wrap p-3 bg-gray-100 rounded-md border border-gray-200 shadow-inner">
+                        {lead.message}
+                      </p>
+                    </details>
+                  </td>
 
-        {showStats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white border border-zinc-300 p-4 rounded-lg shadow-sm">
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">All Inquiries</div>
-              <div className="text-xl font-bold text-zinc-900 mt-0.5">{leads.length}</div>
-            </div>
-            <div className="bg-white border border-zinc-300 p-4 rounded-lg shadow-sm border-l-amber-500 border-l-4">
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">New</div>
-              <div className="text-xl font-bold text-zinc-900 mt-0.5">{countNew}</div>
-            </div>
-            <div className="bg-white border border-zinc-300 p-4 rounded-lg shadow-sm border-l-blue-500 border-l-4">
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">In Progress</div>
-              <div className="text-xl font-bold text-zinc-900 mt-0.5">{countInProgress}</div>
-            </div>
-            <div className="bg-white border border-zinc-300 p-4 rounded-lg shadow-sm border-l-green-500 border-l-4">
-              <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Completed</div>
-              <div className="text-xl font-bold text-zinc-900 mt-0.5">{countCompleted}</div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-          <div className="lg:col-span-3 bg-white rounded-lg border border-zinc-300 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-zinc-300 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 bg-zinc-50/50">
-              <div className="flex bg-white p-0.5 rounded-md border border-zinc-300">
-                {(['All', 'New', 'In Progress', 'Completed'] as const).map((tab) => (
-                  <button
-                    key={tab} onClick={() => setActiveTab(tab)}
-                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md cursor-pointer ${
-                      activeTab === tab ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-zinc-800'
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}
-                  className="p-1.5 bg-white border border-zinc-300 rounded-md text-xs text-zinc-600 focus:outline-none cursor-pointer"
-                >
-                  <option value="All">All Services</option>
-                  <option value="Technical Support">Technical Support</option>
-                  <option value="E-commerce Consulting">E-commerce Consulting</option>
-                  <option value="System Automation">System Automation</option>
-                </select>
-
-                <select
-                  value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'name')}
-                  className="p-1.5 bg-white border border-zinc-300 rounded-md text-xs text-zinc-600 focus:outline-none cursor-pointer"
-                >
-                  <option value="date">Sort: Newest</option>
-                  <option value="name">Sort: Name</option>
-                </select>
-
-                <input 
-                  type="text" placeholder="Search..."
-                  className="p-1.5 px-2.5 bg-white border border-zinc-300 rounded-md text-xs text-zinc-900 focus:outline-none w-full sm:w-[130px]"
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                />
-
-                {selectedIds.length > 0 && (
-                  <button
-                    onClick={handleBulkDelete}
-                    className="px-2.5 py-1.5 text-xs bg-red-50 text-red-600 border border-red-300 rounded-md font-medium cursor-pointer"
-                  >
-                    Remove Selected ({selectedIds.length})
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-300 text-[10px] font-bold text-zinc-500 uppercase tracking-wider bg-zinc-100/80">
-                    <th className="py-3 px-4 w-10 text-center border-r border-zinc-300">
-                      <input 
-                        type="checkbox" className="cursor-pointer border-zinc-400"
-                        checked={selectedIds.length === filteredLeads.length && filteredLeads.length > 0}
-                        onChange={toggleSelectAll}
-                      />
-                    </th>
-                    <th className="py-3 px-4 border-r border-zinc-300">Customer Details</th>
-                    <th className="py-3 px-4 border-r border-zinc-300">Service Category</th>
-                    <th className="py-3 px-4 border-r border-zinc-300">Current Progress</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-300 text-xs">
-                  {filteredLeads.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-10 text-center text-zinc-400 italic bg-zinc-50/30">
-                        No customer records available.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-zinc-50/60 transition-colors">
-                        <td className="py-3 px-4 text-center border-r border-zinc-300">
-                          <input 
-                            type="checkbox" className="cursor-pointer border-zinc-400"
-                            checked={selectedIds.includes(lead.id)}
-                            onChange={() => toggleSelectOne(lead.id)}
-                          />
-                        </td>
-                        <td className="py-3 px-4 border-r border-zinc-300">
-                          <div className="font-semibold text-zinc-900">{lead.firstName} {lead.lastName}</div>
-                          <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{lead.email}</div>
-                          {lead.message && (
-                            <div className="text-[11px] text-zinc-600 mt-1.5 border-l-2 border-zinc-400 pl-2 bg-zinc-50/50 p-1 rounded">
-                              "{lead.message}"
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 border-r border-zinc-300">
-                          <span className="text-[10px] font-medium text-zinc-700 bg-zinc-100 border border-zinc-300 px-2 py-0.5 rounded">
-                            {lead.serviceRequested}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 border-r border-zinc-300">
-                          <select
-                            value={lead.status}
-                            onChange={(e) => handleStatusChange(lead.id, e.target.value as Lead['status'])}
-                            className={`p-1 font-bold text-[10px] border rounded bg-white cursor-pointer focus:outline-none ${
-                              lead.status === 'New' ? 'border-amber-300 text-amber-800' :
-                              lead.status === 'In Progress' ? 'border-blue-300 text-blue-800' :
-                              'border-green-300 text-green-800'
-                            }`}
-                          >
-                            <option value="New">New</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
-                          </select>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button 
-                            onClick={() => deleteLead(lead.id)}
-                            className="text-zinc-400 hover:text-red-600 font-medium transition-colors cursor-pointer border border-zinc-200 hover:border-red-200 bg-zinc-50 hover:bg-red-50 px-2 py-1 rounded"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="lg:col-span-1 bg-white border border-zinc-300 rounded-lg p-4 space-y-3 shadow-sm max-h-[400px] overflow-hidden flex flex-col">
-            <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Recent Activity Log</h3>
-            <div className="overflow-y-auto space-y-2 flex-1 pr-1 border-t border-zinc-300 pt-2">
-              {logs.map((log) => (
-                <div key={log.id} className="text-[11px] leading-relaxed text-zinc-600 flex gap-1.5 items-start">
-                  <span className="font-mono text-zinc-400 text-[10px] shrink-0">{log.timestamp}</span>
-                  <span className="text-zinc-600">{log.action}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                  {/* Column 4: Status Label */}
+                  <td className="p-4 align-top">
+                    <span className="px-3 py-1 text-xs font-bold bg-blue-100 text-blue-800 rounded-full">
+                      {lead.status}
+                    </span>
+                  </td>
+                  
+                  {/* Column 5: Delete Action */}
+                  <td className="p-4 align-top">
+                    <button
+                      onClick={() => handleDelete(lead.id)}
+                      className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded shadow hover:bg-red-700 active:bg-red-800 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                  
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-    </main>
+    </div>
   );
 }
