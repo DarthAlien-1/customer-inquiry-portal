@@ -1,11 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'Customer Inquiry Admin Dashboard',
-};
 
 interface Lead {
   id: string;
