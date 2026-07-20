@@ -28,6 +28,9 @@ export default function AdminDashboard() {
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showStats, setShowStats] = useState(true);
+  
+  // NEW: State to manage the currently viewed message in the modal
+  const [viewingMessage, setViewingMessage] = useState<Lead | null>(null);
 
   // Helper function to add a timestamped UI log entry
   const addLog = (actionText: string) => {
@@ -141,7 +144,7 @@ export default function AdminDashboard() {
   const countCompleted = leads.filter(l => l.status === 'Completed').length;
 
   return (
-    <main className="min-h-screen bg-[#f8f9fa] p-6 md:p-10 text-zinc-700 font-sans tracking-tight">
+    <main className="min-h-screen bg-[#f8f9fa] p-6 md:p-10 text-zinc-700 font-sans tracking-tight relative">
       <div className="max-w-7xl mx-auto space-y-6">
         
         <div className="pb-4 border-b border-zinc-300 flex items-center justify-between">
@@ -275,16 +278,16 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         
-                        {/* NEW: Expandable Message Column */}
+                        {/* UPDATED: Clickable text that triggers the modal */}
                         <td className="py-3 px-4 border-r border-zinc-300 align-top max-w-[200px]">
-                          <details className="cursor-pointer group">
-                            <summary className="truncate text-[11px] font-medium text-zinc-600 hover:text-zinc-900 outline-none list-none">
-                              {lead.message || "No additional message provided."}
-                            </summary>
-                            <p className="mt-2 text-[11px] text-zinc-600 whitespace-pre-wrap p-2 bg-zinc-50 rounded border border-zinc-200">
-                              {lead.message}
-                            </p>
-                          </details>
+                          <button
+                            onClick={() => lead.message ? setViewingMessage(lead) : null}
+                            className={`truncate text-[11px] font-medium text-left w-full outline-none transition-colors ${
+                              lead.message ? 'text-zinc-600 hover:text-blue-600 cursor-pointer' : 'text-zinc-400 cursor-default'
+                            }`}
+                          >
+                            {lead.message || "No additional message provided."}
+                          </button>
                         </td>
 
                         <td className="py-3 px-4 border-r border-zinc-300 align-top">
@@ -331,6 +334,38 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* NEW: Modal Overlay for Request Details */}
+      {viewingMessage && (
+        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-zinc-200">
+            <div className="p-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50">
+              <h3 className="font-bold text-zinc-900 text-sm">Request Details</h3>
+              <button
+                onClick={() => setViewingMessage(null)}
+                className="text-zinc-400 hover:text-zinc-900 transition-colors text-lg font-medium cursor-pointer px-2"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 text-sm text-zinc-700 whitespace-pre-wrap max-h-[60vh] overflow-y-auto break-words">
+              <div className="mb-4 pb-2 border-b border-zinc-100 text-[11px] text-zinc-500 font-mono">
+                From: {viewingMessage.firstName} {viewingMessage.lastName}
+              </div>
+              {viewingMessage.message}
+            </div>
+            <div className="p-3 border-t border-zinc-200 bg-zinc-50 text-right">
+              <button
+                onClick={() => setViewingMessage(null)}
+                className="px-4 py-1.5 bg-zinc-900 text-white text-xs font-medium rounded hover:bg-zinc-800 transition-colors cursor-pointer shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
