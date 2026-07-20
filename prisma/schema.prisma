@@ -1,0 +1,19 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Lead {
+  id               String   @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String
+  serviceRequested String
+  message          String
+  status           String   @default("New")
+  createdAt        DateTime @default(now())
+}
