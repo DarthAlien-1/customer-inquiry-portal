@@ -62,7 +62,7 @@ export default function PublicForm() {
     <main className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-6 text-zinc-700 font-sans tracking-tight">
       <div className="w-full max-w-md bg-white p-6 rounded-lg border border-zinc-300 shadow-sm space-y-4">
         <div className="text-center pb-2 border-b border-zinc-200">
-          <h1 className="text-lg font-bold text-zinc-900">Customer Request Portal</h1>
+          <h1 className="text-lg font-bold text-zinc-900">Customer Inquiry Portal</h1>
           <p className="text-xs text-zinc-500 mt-0.5">Please fill out the details below to submit your inquiry.</p>
         </div>
         
