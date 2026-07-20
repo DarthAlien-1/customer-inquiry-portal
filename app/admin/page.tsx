@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Customer Inquiry Admin Dashboard',
+};
 
 interface Lead {
   id: string;
@@ -28,17 +33,13 @@ export default function AdminDashboard() {
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showStats, setShowStats] = useState(true);
-  
-  // NEW: State to manage the currently viewed message in the modal
   const [viewingMessage, setViewingMessage] = useState<Lead | null>(null);
 
-  // Helper function to add a timestamped UI log entry
   const addLog = (actionText: string) => {
     const timeStr = new Date().toTimeString().split(' ')[0].substring(0, 5);
     setLogs(prev => [{ id: Math.random().toString(), timestamp: timeStr, action: actionText }, ...prev]);
   };
 
-  // 1. Load data grid from database route on page load
   useEffect(() => {
     async function fetchLeads() {
       try {
@@ -54,7 +55,6 @@ export default function AdminDashboard() {
     fetchLeads();
   }, []);
 
-  // 2. Update progress status dropdown
   const handleStatusChange = async (id: string, newStatus: Lead['status']) => {
     const leadToUpdate = leads.find(l => l.id === id);
     try {
@@ -73,7 +73,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // 3. Delete a single entry
   const deleteLead = async (id: string) => {
     const leadToDelete = leads.find(l => l.id === id);
     try {
@@ -91,11 +90,9 @@ export default function AdminDashboard() {
     }
   };
 
-  // 4. Delete multiple items
   const handleBulkDelete = async () => {
     addLog(`Starting bulk delete for ${selectedIds.length} items...`);
     
-    // Process deletions side by side
     const deletePromises = selectedIds.map(async (id) => {
       try {
         const response = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
@@ -146,7 +143,6 @@ export default function AdminDashboard() {
   return (
     <main className="min-h-screen bg-[#f8f9fa] p-6 md:p-10 text-zinc-700 font-sans tracking-tight relative">
       <div className="max-w-7xl mx-auto space-y-6">
-        
         <div className="pb-4 border-b border-zinc-300 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-zinc-900">Internal Management Dashboard</h1>
@@ -278,7 +274,6 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         
-                        {/* UPDATED: Clickable text that triggers the modal */}
                         <td className="py-3 px-4 border-r border-zinc-300 align-top max-w-[200px]">
                           <button
                             onClick={() => lead.message ? setViewingMessage(lead) : null}
@@ -335,7 +330,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* NEW: Modal Overlay for Request Details */}
       {viewingMessage && (
         <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-zinc-200">
